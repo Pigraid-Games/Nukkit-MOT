@@ -6172,16 +6172,6 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
         }
     }
 
-    public void knockBack(Entity attacker, double damage, double deltaX, double deltaZ, double base, double r, double modifier) {
-        double resistance = 0;
-        for (Item armor : inventory.getArmorContents()) {
-            if (armor != null && armor.getTier() == ItemArmor.TIER_NETHERITE) {
-                resistance += 0.15;
-            }
-        }
-        super.knockBack(attacker, damage, deltaX, deltaZ, base, resistance, modifier);
-    }
-
     @Override
     public void setMaxHealth(int newMaxHealth) {
         super.setMaxHealth(newMaxHealth);
@@ -7578,6 +7568,17 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
     public void setNoShieldTicks(int noShieldTicks) {
         this.noShieldTicks = noShieldTicks;
+    }
+
+    @Override
+    public void knockBack(Entity attacker, double damage, double deltaX, double deltaZ, double base, double r, double modifier) {
+        double resistance = 0;
+        for (Item armor : inventory.getArmorContents()) {
+            if (armor != null && armor.getTier() == ItemArmor.TIER_NETHERITE) {
+                resistance += 0.15;
+            }
+        }
+        super.knockBack(attacker, damage, deltaX, deltaZ, base, resistance, modifier);
     }
 
     @Override
