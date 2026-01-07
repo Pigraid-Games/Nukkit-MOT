@@ -370,10 +370,13 @@ public class LevelDBProvider implements LevelProvider {
     @Override
     public Map<Long, BaseFullChunk> getLoadedChunks() {
         // Filter out null values to prevent ImmutableMap.copyOf from failing
+        // Synchronize on chunks to prevent concurrent modification during iteration
         Map<Long, BaseFullChunk> filtered = new HashMap<>();
-        for (Long2ObjectMap.Entry<BaseFullChunk> entry : chunks.long2ObjectEntrySet()) {
-            if (entry.getValue() != null) {
-                filtered.put(entry.getLongKey(), entry.getValue());
+        synchronized (chunks) {
+            for (Long2ObjectMap.Entry<BaseFullChunk> entry : chunks.long2ObjectEntrySet()) {
+                if (entry.getValue() != null) {
+                    filtered.put(entry.getLongKey(), entry.getValue());
+                }
             }
         }
         return ImmutableMap.copyOf(filtered);
