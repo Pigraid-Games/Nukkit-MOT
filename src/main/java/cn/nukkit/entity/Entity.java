@@ -2934,16 +2934,23 @@ public abstract class Entity extends Location implements Metadatable {
 
             if (!this.justCreated) {
                 Map<Integer, Player> newChunk = this.level.getChunkPlayers(cx, cz);
+
+                // Create set of player IDs to exclude (already spawned)
+                Set<Integer> excludeIds = new HashSet<>();
+
                 for (Player player : new ArrayList<>(this.hasSpawned.values())) {
                     if (!newChunk.containsKey(player.getLoaderId())) {
                         this.despawnFrom(player);
                     } else {
-                        newChunk.remove(player.getLoaderId());
+                        excludeIds.add(player.getLoaderId());
                     }
                 }
 
+                // Spawn to players not in exclude set
                 for (Player player : newChunk.values()) {
-                    this.spawnTo(player);
+                    if (!excludeIds.contains(player.getLoaderId())) {
+                        this.spawnTo(player);
+                    }
                 }
             }
 

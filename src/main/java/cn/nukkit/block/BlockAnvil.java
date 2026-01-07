@@ -12,7 +12,9 @@ import cn.nukkit.utils.BlockColor;
 import cn.nukkit.utils.Faceable;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Created by Pub4Game on 27.12.2015.
@@ -102,9 +104,14 @@ public class BlockAnvil extends BlockFallableMeta implements Faceable {
         if (player == null) {
             this.getLevel().addSound(new AnvilFallSound(this));
         } else {
-            Collection<Player> players = getLevel().getChunkPlayers(getChunkX(), getChunkZ()).values();
-            players.remove(player);
-            if (!players.isEmpty()) {
+            Collection<Player> allPlayers = getLevel().getChunkPlayers(getChunkX(), getChunkZ()).values();
+            if (allPlayers.size() > 1) {
+                List<Player> players = new ArrayList<>(allPlayers.size() - 1);
+                for (Player p : allPlayers) {
+                    if (p != player) {
+                        players.add(p);
+                    }
+                }
                 this.getLevel().addSound(new AnvilFallSound(this));
             }
         }

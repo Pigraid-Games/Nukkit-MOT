@@ -4605,10 +4605,15 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                         }
                         if (this.grindstoneTransaction.canExecute()) {
                             if (this.grindstoneTransaction.execute()) {
-                                Collection<Player> players = level.getChunkPlayers(getChunkX(), getChunkZ()).values();
-                                players.remove(this);
-                                if (!players.isEmpty()) {
-                                    level.addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_BLOCK_GRINDSTONE_USE);
+                                Collection<Player> allPlayers = level.getChunkPlayers(getChunkX(), getChunkZ()).values();
+                                if (allPlayers.size() > 1) {
+                                    List<Player> playersList = new ArrayList<>(allPlayers.size() - 1);
+                                    for (Player p : allPlayers) {
+                                        if (p != this) {
+                                            playersList.add(p);
+                                        }
+                                    }
+                                    level.addLevelSoundEvent(this, LevelSoundEventPacket.SOUND_BLOCK_GRINDSTONE_USE, playersList.toArray(new Player[0]));
                                 }
                             }
                             this.grindstoneTransaction = null;
@@ -4628,9 +4633,14 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
                     }
 
                     if (sound != null) {
-                        Collection<Player> players = level.getChunkPlayers(getChunkX(), getChunkZ()).values();
-                        players.remove(this);
-                        if (!players.isEmpty()) {
+                        Collection<Player> allPlayers = level.getChunkPlayers(getChunkX(), getChunkZ()).values();
+                        if (allPlayers.size() > 1) {
+                            List<Player> players = new ArrayList<>(allPlayers.size() - 1);
+                            for (Player p : allPlayers) {
+                                if (p != this) {
+                                    players.add(p);
+                                }
+                            }
                             level.addSound(this, sound, 1f, 1f, players);
                         }
                     }
@@ -6416,18 +6426,24 @@ public class Player extends EntityHuman implements CommandSender, InventoryHolde
 
             if (!this.justCreated) {
                 Map<Integer, Player> newChunk = this.level.getChunkPlayers(this.getChunkX(), this.getChunkZ());
-                newChunk.remove(this.loaderId);
+
+                // Create set of player IDs to exclude (self + already spawned)
+                Set<Integer> excludeIds = new HashSet<>();
+                excludeIds.add(this.loaderId);
 
                 for (Player player : new ArrayList<>(this.hasSpawned.values())) {
                     if (!newChunk.containsKey(player.loaderId)) {
                         this.despawnFrom(player);
                     } else {
-                        newChunk.remove(player.loaderId);
+                        excludeIds.add(player.loaderId);
                     }
                 }
 
+                // Spawn to players not in exclude set
                 for (Player player : newChunk.values()) {
-                    this.spawnTo(player);
+                    if (!excludeIds.contains(player.loaderId)) {
+                        this.spawnTo(player);
+                    }
                 }
             }
 

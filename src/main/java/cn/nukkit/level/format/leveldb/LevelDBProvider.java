@@ -369,7 +369,14 @@ public class LevelDBProvider implements LevelProvider {
 
     @Override
     public Map<Long, BaseFullChunk> getLoadedChunks() {
-        return ImmutableMap.copyOf(chunks);
+        // Filter out null values to prevent ImmutableMap.copyOf from failing
+        Map<Long, BaseFullChunk> filtered = new HashMap<>();
+        for (Long2ObjectMap.Entry<BaseFullChunk> entry : chunks.long2ObjectEntrySet()) {
+            if (entry.getValue() != null) {
+                filtered.put(entry.getLongKey(), entry.getValue());
+            }
+        }
+        return ImmutableMap.copyOf(filtered);
     }
 
     public Long2ObjectMap<? extends FullChunk> getLoadedChunksUnsafe() {

@@ -207,7 +207,7 @@ public class Server {
     private final UUID serverID;
     private final Config properties;
 
-    private final Map<InetSocketAddress, Player> players = new HashMap<>();
+    private final Map<InetSocketAddress, Player> players = new ConcurrentHashMap<>();
     final Map<UUID, Player> playerList = new HashMap<>();
 
     /**
@@ -229,6 +229,7 @@ public class Server {
     public static final List<String> noTickingWorlds = new ArrayList<>();
 
     private static final Pattern uuidPattern = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}.dat$");
+    private static final Pattern PERMISSION_SPLIT_PATTERN = Pattern.compile(";");
 
     private final Map<Integer, Level> levels = new ConcurrentHashMap<>() {
         @Override
@@ -981,7 +982,7 @@ public class Server {
     public int broadcast(String message, String permissions) {
         Set<CommandSender> recipients = new HashSet<>();
 
-        for (String permission : permissions.split(";")) {
+        for (String permission : PERMISSION_SPLIT_PATTERN.split(permissions)) {
             for (Permissible permissible : this.pluginManager.getPermissionSubscriptions(permission)) {
                 if (permissible instanceof CommandSender && permissible.hasPermission(permission)) {
                     recipients.add((CommandSender) permissible);
@@ -999,7 +1000,7 @@ public class Server {
     public int broadcast(TextContainer message, String permissions) {
         Set<CommandSender> recipients = new HashSet<>();
 
-        for (String permission : permissions.split(";")) {
+        for (String permission : PERMISSION_SPLIT_PATTERN.split(permissions)) {
             for (Permissible permissible : this.pluginManager.getPermissionSubscriptions(permission)) {
                 if (permissible instanceof CommandSender && permissible.hasPermission(permission)) {
                     recipients.add((CommandSender) permissible);
@@ -1509,7 +1510,7 @@ public class Server {
 
         this.checkTickUpdates(this.tickCounter);
 
-        for (Player player : new ArrayList<>(this.players.values())) {
+        for (Player player : this.players.values()) {
             player.checkNetwork();
         }
 
@@ -2197,16 +2198,14 @@ public class Server {
      * @param player player
      */
     public void removePlayer(Player player) {
-        if (this.players.remove(player.getRawSocketAddress()) != null) {
+        // Try direct removal first
+        InetSocketAddress addr = player.getRawSocketAddress();
+        if (this.players.remove(addr, player)) {  // Atomic remove with value check
             return;
         }
 
-        for (InetSocketAddress socketAddress : new ArrayList<>(this.players.keySet())) {
-            if (player == this.players.get(socketAddress)) {
-                this.players.remove(socketAddress);
-                break;
-            }
-        }
+        // Fallback: atomic removal using value equality
+        this.players.values().removeIf(p -> p == player);
     }
 
     /**

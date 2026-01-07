@@ -905,9 +905,9 @@ public class Level implements ChunkManager, Metadatable {
         long index = Level.chunkHash(chunkX, chunkZ);
         Map<Integer, Player> map = this.playerLoaders.get(index);
         if (map != null) {
-            return new HashMap<>(map);
+            return Collections.unmodifiableMap(map);
         } else {
-            return new HashMap<>();
+            return Collections.emptyMap();
         }
     }
 
@@ -947,7 +947,7 @@ public class Level implements ChunkManager, Metadatable {
             Map<Integer, ChunkLoader> newChunkLoader = new HashMap<>();
             newChunkLoader.put(hash, loader);
             this.chunkLoaders.put(index, newChunkLoader);
-            Map<Integer, Player> newPlayerLoader = new HashMap<>();
+            Map<Integer, Player> newPlayerLoader = new ConcurrentHashMap<>();
             if (loader instanceof Player) {
                 newPlayerLoader.put(hash, (Player) loader);
             }
@@ -1115,34 +1115,40 @@ public class Level implements ChunkManager, Metadatable {
 
         this.tickChunks();
 
+        // Swap-buffer pattern: minimize lock contention by swapping and processing outside lock
+        Long2ObjectOpenHashMap<SoftReference<Map<Integer, Object>>> blocksToProcess = null;
         synchronized (changedBlocks) {
             if (!this.changedBlocks.isEmpty()) {
-                if (!this.players.isEmpty()) {
-                    ObjectIterator<Long2ObjectMap.Entry<SoftReference<Map<Integer, Object>>>> iter = changedBlocks.long2ObjectEntrySet().fastIterator();
-                    while (iter.hasNext()) {
-                        Long2ObjectMap.Entry<SoftReference<Map<Integer, Object>>> entry = iter.next();
-                        long index = entry.getLongKey();
-                        Map<Integer, Object> blocks = entry.getValue().get();
-                        int chunkX = Level.getHashX(index);
-                        int chunkZ = Level.getHashZ(index);
-                        if (blocks == null || blocks.size() > MAX_BLOCK_CACHE) {
-                            FullChunk chunk = this.getChunk(chunkX, chunkZ);
-                            for (Player p : this.getChunkPlayers(chunkX, chunkZ).values()) {
-                                p.onChunkChanged(chunk);
-                            }
-                        } else {
-                            Player[] playerArray = this.getChunkPlayers(chunkX, chunkZ).values().toArray(Player.EMPTY_ARRAY);
-                            Vector3[] blocksArray = new Vector3[blocks.size()];
-                            int i = 0;
-                            for (int blockHash : blocks.keySet()) {
-                                Vector3 hash = getBlockXYZ(index, blockHash, this.getDimensionData());
-                                blocksArray[i++] = hash;
-                            }
-                            this.sendBlocks(playerArray, blocksArray, UpdateBlockPacket.FLAG_ALL);
-                        }
-                    }
-                }
+                // Swap the map with a new empty one
+                blocksToProcess = new Long2ObjectOpenHashMap<>(this.changedBlocks);
                 this.changedBlocks.clear();
+            }
+        }
+
+        // Process changed blocks outside the synchronized block
+        if (blocksToProcess != null && !this.players.isEmpty()) {
+            ObjectIterator<Long2ObjectMap.Entry<SoftReference<Map<Integer, Object>>>> iter = blocksToProcess.long2ObjectEntrySet().fastIterator();
+            while (iter.hasNext()) {
+                Long2ObjectMap.Entry<SoftReference<Map<Integer, Object>>> entry = iter.next();
+                long index = entry.getLongKey();
+                Map<Integer, Object> blocks = entry.getValue().get();
+                int chunkX = Level.getHashX(index);
+                int chunkZ = Level.getHashZ(index);
+                if (blocks == null || blocks.size() > MAX_BLOCK_CACHE) {
+                    FullChunk chunk = this.getChunk(chunkX, chunkZ);
+                    for (Player p : this.getChunkPlayers(chunkX, chunkZ).values()) {
+                        p.onChunkChanged(chunk);
+                    }
+                } else {
+                    Player[] playerArray = this.getChunkPlayers(chunkX, chunkZ).values().toArray(Player.EMPTY_ARRAY);
+                    Vector3[] blocksArray = new Vector3[blocks.size()];
+                    int i = 0;
+                    for (int blockHash : blocks.keySet()) {
+                        Vector3 hash = getBlockXYZ(index, blockHash, this.getDimensionData());
+                        blocksArray[i++] = hash;
+                    }
+                    this.sendBlocks(playerArray, blocksArray, UpdateBlockPacket.FLAG_ALL);
+                }
             }
         }
 
